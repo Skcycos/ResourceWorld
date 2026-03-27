@@ -100,7 +100,17 @@ public abstract class MinecraftServerMixin extends BlockableEventLoop<TickTask> 
             long l = generatorOptions.seed();
             long m = BiomeManager.obfuscateSeed(l);
             DerivedLevelData unmodifiableLevelProperties = new DerivedLevelData(this.worldData, data);
-            this.levels.put(key, new ServerLevel(this.resourceWorld$self(), this.executor, this.storageSource, unmodifiableLevelProperties, key, option.createStem(this.resourceWorld$self().registryAccess()), /*? >=1.20.5 {*/StoringChunkProgressListener.createFromGameruleRadius/*?} else {*//*new StoringChunkProgressListener*//*?}*/(16), bl, m, ImmutableList.of(), false, null));
+            LevelStem stem = option.createStem(this.resourceWorld$self().registryAccess());
+            ResourceKey<LevelStem> stemKey = ResourceKey.create(Registries.LEVEL_STEM, key.location());
+            Registry<LevelStem> stemRegistry = this.resourceWorld$self().registryAccess().registryOrThrow(Registries.LEVEL_STEM);
+            if (stemRegistry.get(stemKey.location()) == null) {
+                try {
+                    Registry.register(stemRegistry, stemKey.location(), stem);
+                } catch (Exception e) {
+                    ResourceWorld.LOGGER.warn("Failed to register LevelStem for {}", stemKey.location(), e);
+                }
+            }
+            this.levels.put(key, new ServerLevel(this.resourceWorld$self(), this.executor, this.storageSource, unmodifiableLevelProperties, key, stem, /*? >=1.20.5 {*/StoringChunkProgressListener.createFromGameruleRadius/*?} else {*//*new StoringChunkProgressListener*//*?}*/(16), bl, m, ImmutableList.of(), false, null));
             //? !fabric {
             this.markWorldsDirty();
             //?}
