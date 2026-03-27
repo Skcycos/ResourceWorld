@@ -36,6 +36,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.concurrent.Executor;
 
@@ -110,10 +112,12 @@ public abstract class MinecraftServerMixin extends BlockableEventLoop<TickTask> 
                     ResourceWorld.LOGGER.warn("Failed to register LevelStem for {}", stemKey.location(), e);
                 }
             }
-            this.levels.put(key, new ServerLevel(this.resourceWorld$self(), this.executor, this.storageSource, unmodifiableLevelProperties, key, stem, /*? >=1.20.5 {*/StoringChunkProgressListener.createFromGameruleRadius/*?} else {*//*new StoringChunkProgressListener*//*?}*/(16), bl, m, ImmutableList.of(), false, null));
+            ServerLevel level = new ServerLevel(this.resourceWorld$self(), this.executor, this.storageSource, unmodifiableLevelProperties, key, stem, /*? >=1.20.5 {*/StoringChunkProgressListener.createFromGameruleRadius/*?} else {*//*new StoringChunkProgressListener*//*?}*/(16), bl, m, ImmutableList.of(), false, null);
+            this.levels.put(key, level);
             //? !fabric {
             this.markWorldsDirty();
             //?}
+            this.resourceWorld$fireNeoForgeLevelEvent("Load", level);
             return true;
         } catch (Exception e) {
             ResourceWorld.LOGGER.error("Failed to create world", e);
@@ -123,9 +127,35 @@ public abstract class MinecraftServerMixin extends BlockableEventLoop<TickTask> 
 
     @Override
     public void resourceWorld$removeWorld(ResourceKey<Level> key) {
+        ServerLevel level = this.levels.get(key);
+        if (level != null) this.resourceWorld$fireNeoForgeLevelEvent("Unload", level);
         this.levels.remove(key);
         //? !fabric {
         this.markWorldsDirty();
         //?}
+    }
+
+    @Unique
+    private void resourceWorld$fireNeoForgeLevelEvent(String eventName, ServerLevel level) {
+        try {
+            Class<?> neoforge = Class.forName("net.neoforged.neoforge.common.NeoForge");
+            Object bus = neoforge.getField("EVENT_BUS").get(null);
+            Class<?> eventBase = Class.forName("net.neoforged.bus.api.Event");
+            Class<?> eventClass = Class.forName("net.neoforged.neoforge.event.level.LevelEvent$" + eventName);
+
+            Object event = null;
+            for (Constructor<?> ctor : eventClass.getConstructors()) {
+                if (ctor.getParameterCount() != 1) continue;
+                Class<?> param = ctor.getParameterTypes()[0];
+                if (!param.isInstance(level)) continue;
+                event = ctor.newInstance(level);
+                break;
+            }
+            if (event == null) return;
+
+            Method post = bus.getClass().getMethod("post", eventBase);
+            post.invoke(bus, event);
+        } catch (Throwable ignored) {
+        }
     }
 }

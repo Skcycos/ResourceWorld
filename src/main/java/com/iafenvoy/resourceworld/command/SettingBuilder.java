@@ -1,6 +1,7 @@
 package com.iafenvoy.resourceworld.command;
 
 import com.iafenvoy.resourceworld.config.ResourceWorldData;
+import com.iafenvoy.resourceworld.config.WorldConfig;
 import com.mojang.brigadier.arguments.ArgumentType;
 import com.mojang.brigadier.builder.ArgumentBuilder;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -30,12 +31,14 @@ public final class SettingBuilder {
             CommandSourceStack source = ctx.getSource();
             setter.accept(CommandHelper.getDataChecked(ctx).getSettings(), null);
             CommandHelper.sendMessage(source, "setting.set", name, null);
+            WorldConfig.saveConfig();
             return 1;
         }));
         l.then(argument("value", type).executes(ctx -> {//set
                     T value = parser.apply(ctx, "value");
                     setter.accept(CommandHelper.getDataChecked(ctx).getSettings(), value);
                     CommandHelper.sendMessage(ctx.getSource(), "setting.set", name, String.valueOf(value));
+                    WorldConfig.saveConfig();
                     return 1;
                 }))
                 .executes(ctx -> {//get

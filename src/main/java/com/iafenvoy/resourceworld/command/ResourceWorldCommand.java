@@ -27,11 +27,13 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 
+import java.util.UUID;
+
 import static net.minecraft.commands.Commands.argument;
 import static net.minecraft.commands.Commands.literal;
 
 public final class ResourceWorldCommand {
-    private static final Object2LongMap<ServerPlayer> COOLDOWNS = new Object2LongLinkedOpenHashMap<>();
+    private static final Object2LongMap<UUID> COOLDOWNS = new Object2LongLinkedOpenHashMap<>();
     private static final Object2LongMap<String> DELETE_CONFIRM = new Object2LongLinkedOpenHashMap<>();
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
@@ -112,12 +114,13 @@ public final class ResourceWorldCommand {
         ResourceWorldData data = CommandHelper.getDataChecked(ctx);
         ObjectUtil.assertOrThrow(data.isEnabled(), () -> ExceptionTypes.DISABLED.create(source));
         ServerLevel world = CommandHelper.getLevelChecked(ctx);
-        long delta = COOLDOWNS.getOrDefault(player, 0) + data.getSettings().getCooldown() * 1000L - System.currentTimeMillis();
+        UUID uuid = player.getUUID();
+        long delta = COOLDOWNS.getOrDefault(uuid, 0) + data.getSettings().getCooldown() * 1000L - System.currentTimeMillis();
         ObjectUtil.assertOrThrow(delta <= 0, () -> ExceptionTypes.TELEPORT_COOLDOWN.create(source, String.valueOf(delta / 1000)));
         CommandHelper.sendMessage(source, "finding_position");
         BlockPos pos = ObjectUtil.nonNullOrThrow(PositionLocator.locate(world, data), () -> ExceptionTypes.CANNOT_FIND_POSITION.create(source));
         player.teleportTo(world, pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, player.getYRot(), player.getXRot());
-        COOLDOWNS.put(player, System.currentTimeMillis());
+        COOLDOWNS.put(uuid, System.currentTimeMillis());
         return 1;
     }
 
@@ -158,6 +161,7 @@ public final class ResourceWorldCommand {
     private static int setEnable(CommandContext<CommandSourceStack> ctx, boolean enable) throws CommandSyntaxException {
         CommandSourceStack source = ctx.getSource();
         CommandHelper.getDataChecked(ctx).setEnabled(enable);
+        WorldConfig.saveConfig();
         CommandHelper.sendMessage(source, "success");
         return 1;
     }
